@@ -1,0 +1,5 @@
+{
+  "name": "Tesseract Data Viewer",
+  "description": "A high-performance, multi-dimensional data visualizer that renders JSON, JSONL, and CSV in a recursive Tesseract-grid layout.",
+  "requestFramePermissions": []
+}
