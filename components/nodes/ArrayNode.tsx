@@ -4,8 +4,8 @@ import { DispatcherNode } from './DispatcherNode';
 import { ChevronDown } from 'lucide-react';
 import { ViewerContext } from '../ViewerContext';
 
-const ROW_HEIGHT = 34;
-const HEADER_HEIGHT = 60; // Taller header for grouped columns
+const ROW_HEIGHT = 30; // Reduced from 34
+const HEADER_HEIGHT = 50; // Taller header for grouped columns
 const MAX_CONTAINER_HEIGHT = 500;
 const VIRTUALIZATION_THRESHOLD = 100;
 const SAMPLE_SIZE = 50; // How many rows to scan to determine column structure
@@ -170,7 +170,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
     });
 
     return (
-      <div className="overflow-x-auto my-1">
+      <div className="overflow-x-auto my-1 custom-scrollbar">
          {!isRoot && (
             <div 
                 className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-1.5 py-0.5 mb-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium"
@@ -181,12 +181,12 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
             </div>
          )}
         <div 
-            className="border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm bg-white dark:bg-gray-900"
+            className="border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm bg-white dark:bg-gray-900 custom-scrollbar"
             ref={containerRef}
             onScroll={handleScroll}
             style={containerStyles}
         >
-            <table className="border-collapse w-full min-w-max text-sm relative">
+            <table className="border-collapse w-full min-w-max text-sm relative table-fixed">
             <thead className="sticky top-0 z-20 shadow-sm bg-gray-50 dark:bg-gray-800">
                 {/* Primary Header Row */}
                 <tr>
@@ -198,7 +198,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                             key={def.key}
                             colSpan={def.type === 'group' ? def.subColumns?.length : 1}
                             rowSpan={def.type === 'group' ? 1 : 2}
-                            className={`border-b border-r border-gray-200 dark:border-gray-700 px-3 py-1.5 text-left text-xs font-bold uppercase tracking-wider
+                            className={`border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis
                                 ${def.type === 'group' 
                                     ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' 
                                     : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800'
@@ -216,7 +216,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                          return def.subColumns.map(subKey => (
                              <th 
                                 key={`${def.key}-${subKey}`}
-                                className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
+                                className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis"
                              >
                                  {subKey}
                              </th>
@@ -235,13 +235,13 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 const rowObj = item as JsonObject;
                 return (
                     <tr key={rowIndex} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group" style={{ height: ROW_HEIGHT }}>
-                    <td className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/50 px-2 py-1.5 text-center font-mono text-xs text-gray-400 dark:text-gray-600 align-top">
+                    <td className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/50 px-2 py-1 text-center font-mono text-[10px] text-gray-400 dark:text-gray-600 align-top">
                         {rowIndex}
                     </td>
                     {columnDefs.map((def) => {
                         if (def.type === 'simple') {
                              return (
-                                <td key={def.key} className="border-b border-r border-gray-200 dark:border-gray-700 px-3 py-1.5 align-top last:border-r-0 text-xs">
+                                <td key={def.key} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top last:border-r-0 text-xs max-w-xs overflow-hidden">
                                     {rowObj.hasOwnProperty(def.key) ? (
                                         <DispatcherNode data={rowObj[def.key]} name={def.key} depth={depth + 1} />
                                     ) : (
@@ -253,7 +253,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                             // Grouped Column Rendering
                             const parentVal = rowObj[def.key] as JsonObject;
                             return def.subColumns?.map(subKey => (
-                                <td key={`${def.key}-${subKey}`} className="border-b border-r border-gray-200 dark:border-gray-700 px-3 py-1.5 align-top text-xs">
+                                <td key={`${def.key}-${subKey}`} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs max-w-xs overflow-hidden">
                                     {(parentVal && parentVal.hasOwnProperty(subKey)) ? (
                                         <DispatcherNode data={parentVal[subKey]} name={subKey} depth={depth + 1} />
                                     ) : (
@@ -280,7 +280,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
 
   // List View (Fallback)
   return (
-    <div className="my-1">
+    <div className="my-1 custom-scrollbar">
         {!isRoot && (
             <div 
                 className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-1.5 py-0.5 mb-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium"
@@ -291,7 +291,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
             </div>
          )}
         <div 
-            className="overflow-hidden rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900"
+            className="overflow-hidden rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900 custom-scrollbar"
             ref={containerRef}
             onScroll={handleScroll}
             style={containerStyles}
@@ -299,10 +299,10 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
             <table className="border-collapse w-full text-sm relative">
                 <thead className="sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
+                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
                             Index
                         </th>
-                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Value
                         </th>
                     </tr>
@@ -317,10 +317,10 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                     const rowIndex = effectiveStartIndex + i;
                     return (
                         <tr key={rowIndex} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" style={{ height: ROW_HEIGHT }}>
-                        <td className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/50 px-3 py-1.5 align-top font-mono text-xs text-gray-500 dark:text-gray-500">
+                        <td className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/50 px-2 py-1 align-top font-mono text-[10px] text-gray-500 dark:text-gray-500">
                             {rowIndex}
                         </td>
-                        <td className="border-b border-gray-200 dark:border-gray-700 px-3 py-1.5 align-top text-xs">
+                        <td className="border-b border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs">
                             <DispatcherNode data={item} name={rowIndex.toString()} depth={depth + 1} />
                         </td>
                         </tr>

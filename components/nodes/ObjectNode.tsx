@@ -4,7 +4,7 @@ import { DispatcherNode } from './DispatcherNode';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { ViewerContext } from '../ViewerContext';
 
-const ROW_HEIGHT = 34;
+const ROW_HEIGHT = 30; // Reduced from 34
 const MAX_CONTAINER_HEIGHT = 500;
 const VIRTUALIZATION_THRESHOLD = 100;
 
@@ -86,7 +86,7 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
         <div className="text-gray-400 dark:text-gray-500 italic pl-2 text-xs">{'{}'}</div>
       ) : (
         <div 
-            className="overflow-hidden rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900"
+            className="overflow-hidden rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900 custom-scrollbar"
             ref={containerRef}
             onScroll={handleScroll}
             style={containerStyles}
@@ -94,10 +94,10 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
             <table className="border-collapse w-full text-sm relative">
                 <thead className="sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 w-min whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-min whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Key
                         </th>
-                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 w-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Value
                         </th>
                     </tr>
@@ -110,10 +110,10 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
                 )}
                 {visibleKeys.map((key) => (
                     <tr key={key} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" style={{ height: ROW_HEIGHT }}>
-                        <td className="border-b border-r border-gray-200 dark:border-gray-700 px-3 py-1.5 align-top bg-gray-50/30 dark:bg-gray-900/50 w-min whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 select-text">
+                        <td className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top bg-gray-50/30 dark:bg-gray-900/50 w-min whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 select-text">
                             {key}
                         </td>
-                        <td className="border-b border-gray-200 dark:border-gray-700 px-3 py-1.5 align-top text-xs">
+                        <td className="border-b border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs">
                             <DispatcherNode data={objData[key]} name={key} depth={depth + 1} />
                         </td>
                     </tr>

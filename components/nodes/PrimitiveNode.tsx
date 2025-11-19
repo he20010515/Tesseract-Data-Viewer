@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { NodeProps } from '../../types';
 import { DispatcherNode } from './DispatcherNode';
-import { Braces, Quote, FileJson, FileText, Sigma } from 'lucide-react';
+import { Braces, Quote, FileJson, FileText, Sigma, ChevronDown, ChevronUp } from 'lucide-react';
 import { Marked } from 'marked';
 import katex from 'katex';
 
@@ -77,8 +77,11 @@ interface DetectedContent {
   hasMath?: boolean;
 }
 
+const TRUNCATE_LENGTH = 200;
+
 export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
   const [isParsedView, setIsParsedView] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const detected: DetectedContent | null = useMemo(() => {
     if (typeof data !== 'string') return null;
@@ -136,13 +139,14 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
   }
 
   if (typeof data === 'string') {
+    // -- Parsed Content (JSON/Markdown) --
     if (detected) {
        const isJson = detected.type === 'json';
        const isMarkdown = detected.type === 'markdown';
        const hasMath = detected.hasMath;
 
        return (
-         <div className="inline-block align-top max-w-full my-0.5 w-full">
+         <div className="inline-block align-top max-w-full my-0.5 w-full min-w-[200px]">
             <div className="flex items-center gap-2 mb-1">
                <button
                   onClick={(e) => {
@@ -183,15 +187,45 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
                     />
                 )
             ) : (
-                <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs block max-w-xl overflow-x-auto border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-1.5 rounded">
-                    "{data}"
-                </span>
+                <div className="relative">
+                   <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs block max-w-[400px] overflow-x-auto border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-1.5 rounded max-h-[300px] overflow-y-auto custom-scrollbar">
+                      "{data}"
+                   </span>
+                </div>
             )}
          </div>
        );
     }
 
-    return <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap">"{data}"</span>;
+    // -- Regular String --
+    const shouldTruncate = data.length > TRUNCATE_LENGTH;
+    
+    return (
+      <div className="inline-flex flex-col items-start max-w-[400px]">
+        <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap leading-relaxed">
+          "{shouldTruncate && !isExpanded ? data.slice(0, TRUNCATE_LENGTH) + '...' : data}"
+        </span>
+        {shouldTruncate && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="mt-1 text-[10px] text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 flex items-center gap-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 px-1 py-0.5 rounded transition-colors"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp size={10} /> Show Less
+              </>
+            ) : (
+              <>
+                <ChevronDown size={10} /> Show More ({data.length - TRUNCATE_LENGTH} chars)
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    );
   }
 
   switch (typeof data) {
