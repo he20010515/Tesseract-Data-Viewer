@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useContext, useEffect } from 'react';
+
+import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { NodeProps, JsonValue, JsonObject } from '../../types';
 import { DispatcherNode } from './DispatcherNode';
 import { ChevronDown, ScanSearch, X, Minimize2, Maximize2 } from 'lucide-react';
@@ -16,10 +17,15 @@ const WIDTH_CLASSES: Record<WidthMode, string> = {
   wide: 'w-96 min-w-[24rem]'
 };
 
+interface SubColumnDef {
+    key: string;
+    suggestedWidth: WidthMode;
+}
+
 interface ColumnDef {
   key: string;
   type: 'simple' | 'group';
-  subColumns?: string[]; // For groups
+  subColumns?: SubColumnDef[]; // For groups
   suggestedWidth: WidthMode; // Heuristic-based default width
 }
 
@@ -31,8 +37,9 @@ const LayoutTemplateIcon = ({ size }: { size: number }) => (
   </svg>
 );
 
-export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
+export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0, path }) => {
   const [expanded, setExpanded] = useState<boolean>(!!isRoot || depth < 1);
+  const nodeRef = useRef<HTMLDivElement>(null);
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -44,7 +51,21 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
   // Inspection Modal State
   const [inspectingCell, setInspectingCell] = useState<{ data: JsonValue; name: string } | null>(null);
 
-  const { expandAllToken, collapseAllToken } = useContext(ViewerContext);
+  const { expandAllToken, collapseAllToken, activePath, onPathSelect } = useContext(ViewerContext);
+
+  const isActive = activePath === path;
+
+  // If a child is active, ensure we are expanded
+  useEffect(() => {
+      if (activePath && activePath.startsWith(path) && activePath !== path) {
+          setExpanded(true);
+      }
+      // Scroll into view if this array itself is selected
+      if (isActive && nodeRef.current) {
+          nodeRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+  }, [activePath, path, isActive]);
+
 
   useEffect(() => {
     if (expandAllToken > 0) setExpanded(true);
@@ -91,15 +112,29 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
     // 2. Deep Scan for Keys & Statistics
     const allKeys = new Set<string>();
     
-    interface KeyStats {
-        appearanceCount: number;
-        objectCount: number;
-        subKeyFreqs: Map<string, number>;
-        // Content heuristics
+    interface Stats {
         maxStrLength: number;
         isAllBoolOrNum: boolean;
     }
+
+    interface KeyStats extends Stats {
+        appearanceCount: number;
+        objectCount: number;
+        subKeyFreqs: Map<string, number>;
+        subKeyStats: Map<string, Stats>; // Track stats for sub-keys too
+    }
+    
     const keyStats = new Map<string, KeyStats>();
+
+    // Helper to update stats
+    const updateStats = (stats: Stats, val: JsonValue) => {
+        if (typeof val === 'string') {
+            stats.maxStrLength = Math.max(stats.maxStrLength, val.length);
+            stats.isAllBoolOrNum = false;
+        } else if (typeof val !== 'number' && typeof val !== 'boolean' && val !== null) {
+            stats.isAllBoolOrNum = false; 
+        }
+    };
 
     for (let i = 0; i < currentData.length; i++) {
       const item = currentData[i];
@@ -116,6 +151,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 appearanceCount: 0, 
                 objectCount: 0, 
                 subKeyFreqs: new Map(),
+                subKeyStats: new Map(),
                 maxStrLength: 0,
                 isAllBoolOrNum: true
             });
@@ -123,69 +159,71 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
         const stats = keyStats.get(k)!;
         stats.appearanceCount++;
 
-        // Type analysis
         if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
             stats.objectCount++;
-            stats.isAllBoolOrNum = false; // It's an object
+            stats.isAllBoolOrNum = false;
+            
+            // Recurse stats for sub-keys
             Object.keys(val).forEach(subKey => {
                 stats.subKeyFreqs.set(subKey, (stats.subKeyFreqs.get(subKey) || 0) + 1);
+                
+                if (!stats.subKeyStats.has(subKey)) {
+                    stats.subKeyStats.set(subKey, { maxStrLength: 0, isAllBoolOrNum: true });
+                }
+                updateStats(stats.subKeyStats.get(subKey)!, val[subKey]);
             });
         } else {
-            // Primitive analysis
-            if (typeof val === 'string') {
-                stats.maxStrLength = Math.max(stats.maxStrLength, val.length);
-                stats.isAllBoolOrNum = false;
-            } else if (typeof val !== 'number' && typeof val !== 'boolean' && val !== null) {
-                stats.isAllBoolOrNum = false; // e.g. array
-            }
+            updateStats(stats, val);
         }
       });
     }
 
     const sortedKeys = Array.from(allKeys).sort();
     const defs: ColumnDef[] = [];
+    
+    // Reusable Width Calculator
+    const calculateWidth = (key: string, stats: Stats): WidthMode => {
+         if (
+             key === 'id' || 
+             key.endsWith('_id') || 
+             key === 'index' || 
+             stats.isAllBoolOrNum ||
+             stats.maxStrLength < 10
+         ) {
+             return 'compact';
+         } else if (stats.maxStrLength > 60) {
+             return 'wide';
+         }
+         return 'medium';
+    };
 
     sortedKeys.forEach(key => {
         const stats = keyStats.get(key);
         let type: 'simple' | 'group' = 'simple';
-        let subColumns: string[] = [];
+        let subColumns: SubColumnDef[] = [];
         let suggestedWidth: WidthMode = 'medium';
 
-        // Group Detection Logic
-        if (stats && stats.objectCount > 0) {
-            const isConsistentlyObject = (stats.objectCount / stats.appearanceCount) > 0.85;
+        if (stats) {
+            suggestedWidth = calculateWidth(key, stats);
 
-            if (isConsistentlyObject) {
-                const distinctSubKeys = Array.from(stats.subKeyFreqs.keys());
-                const distinctCount = distinctSubKeys.length;
-                
-                // Heuristic: Only group if it's not too messy (small number of subkeys)
-                if (distinctCount > 0 && distinctCount <= 5) {
-                     type = 'group';
-                     subColumns = distinctSubKeys.sort();
+            // Group Detection Logic
+            if (stats.objectCount > 0) {
+                const isConsistentlyObject = (stats.objectCount / stats.appearanceCount) > 0.85;
+
+                if (isConsistentlyObject) {
+                    const distinctSubKeys = Array.from(stats.subKeyFreqs.keys());
+                    const distinctCount = distinctSubKeys.length;
+                    if (distinctCount > 0 && distinctCount <= 5) {
+                         type = 'group';
+                         // Generate sub-column definitions with smart widths
+                         subColumns = distinctSubKeys.sort().map(subKey => ({
+                             key: subKey,
+                             suggestedWidth: calculateWidth(subKey, stats.subKeyStats.get(subKey) || { maxStrLength: 20, isAllBoolOrNum: false })
+                         }));
+                    }
                 }
             }
         }
-
-        // Width Heuristic Logic
-        if (type === 'simple' && stats) {
-             if (
-                 key === 'id' || 
-                 key.endsWith('_id') || 
-                 key === 'index' || 
-                 stats.isAllBoolOrNum ||
-                 stats.maxStrLength < 10
-             ) {
-                 suggestedWidth = 'compact';
-             } else if (stats.maxStrLength > 60) {
-                 suggestedWidth = 'wide';
-             }
-        }
-        
-        // Note: For groups, suggestedWidth applies to the parent (though unused in UI now)
-        // Logic could be extended to subColumns, but for now we default subColumns to 'medium' or 'compact'
-        // in the render loop, or we could change the data structure to store per-subcolumn width.
-        // For simplicity, we'll keep subcolumns as 'medium' default unless overridden.
 
         defs.push({ key, type, subColumns, suggestedWidth });
     });
@@ -197,18 +235,25 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
 
   const toggleColWidth = (key: string) => {
     setColWidths(prev => {
-        // Find default from definition
         let defaultWidth: WidthMode = 'medium';
-        // Check root columns
+        
+        // Try to find top-level definition
         const rootDef = columnDefs.find(d => d.key === key);
+        
         if (rootDef) {
              defaultWidth = rootDef.suggestedWidth;
         } else {
-             // Check subcolumns: "parent.child"
-             const [parent, child] = key.split('.');
-             // For subcolumns, we default to medium for now as we didn't calculate deep stats
-             // But we can infer from key name
-             if (child === 'id' || child === 'value') defaultWidth = 'compact';
+             // Try to find nested definition
+             // Key format: "parentKey.childKey"
+             const parts = key.split('.');
+             if (parts.length === 2) {
+                 const [pKey, cKey] = parts;
+                 const parentDef = columnDefs.find(d => d.key === pKey);
+                 if (parentDef && parentDef.type === 'group' && parentDef.subColumns) {
+                     const subDef = parentDef.subColumns.find(s => s.key === cKey);
+                     if (subDef) defaultWidth = subDef.suggestedWidth;
+                 }
+             }
         }
 
         const current = prev[key] || defaultWidth;
@@ -242,14 +287,23 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
       setPageSize(newSize);
       setPage(1); 
   };
+  
+  const handleHeaderClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onPathSelect(path);
+      setExpanded(!expanded);
+  };
 
   // --- Render ---
 
   if (!expanded && !isRoot) {
     return (
       <button
-        onClick={() => setExpanded(true)}
-        className="flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+        onClick={handleHeaderClick}
+        ref={nodeRef as any}
+        className={`flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700
+            ${isActive ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : ''}
+        `}
       >
         <span className="font-bold text-xs mr-1">{'['}</span>
         <span className="text-xs opacity-80">{length} items</span>
@@ -267,7 +321,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
   // Matrix View
   if (isArrayOfObjects) {
     return (
-      <div className="my-1 inline-flex flex-col items-start text-left max-w-full">
+      <div className={`my-1 inline-flex flex-col items-start text-left max-w-full ${isActive ? 'ring-2 ring-yellow-300 dark:ring-yellow-700/50 rounded' : ''}`} ref={nodeRef}>
          {/* Modal Portal */}
          {inspectingCell && createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200">
@@ -294,7 +348,8 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                          <DispatcherNode 
                             data={inspectingCell.data} 
                             isRoot={true} 
-                            disableTruncation={true} 
+                            disableTruncation={true}
+                            path="inspect_modal"
                         />
                     </div>
                 </div>
@@ -304,8 +359,10 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
 
          {!isRoot && (
             <div 
-                className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-2 py-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium relative z-10 -mb-px"
-                onClick={() => setExpanded(false)}
+                className={`bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-2 py-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium relative z-10 -mb-px
+                    ${isActive ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' : ''}
+                `}
+                onClick={handleHeaderClick}
             >
                 <ChevronDown size={10} className="mr-1 opacity-70" />
                 <span>Table ({length})</span>
@@ -362,24 +419,21 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 <tr>
                      {columnDefs.map((def) => {
                          if (def.type !== 'group' || !def.subColumns) return null;
-                         return def.subColumns.map(subKey => {
-                             const fullKey = `${def.key}.${subKey}`;
-                             // Simple heuristic for subkeys
-                             const subDefaultWidth = (subKey === 'id' || subKey === 'value') ? 'compact' : 'medium';
-
+                         return def.subColumns.map(subCol => {
+                             const fullKey = `${def.key}.${subCol.key}`;
                              return (
                                 <th 
                                     key={fullKey}
-                                    className={`border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider overflow-hidden ${getWidthClass(fullKey, subDefaultWidth)}`}
+                                    className={`border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider overflow-hidden ${getWidthClass(fullKey, subCol.suggestedWidth)}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 group/header">
-                                        <span className="truncate" title={subKey}>{subKey}</span>
+                                        <span className="truncate" title={subCol.key}>{subCol.key}</span>
                                         <button 
                                             onClick={() => toggleColWidth(fullKey)}
                                             className="opacity-0 group-hover/header:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all text-gray-400 hover:text-gray-600"
                                             title="Cycle Width"
                                         >
-                                            {getWidthIcon(fullKey, subDefaultWidth)}
+                                            {getWidthIcon(fullKey, subCol.suggestedWidth)}
                                         </button>
                                     </div>
                                 </th>
@@ -393,6 +447,9 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 const realIndex = indexOffset + i;
                 const isObj = item && typeof item === 'object' && !Array.isArray(item);
                 const rowObj = isObj ? (item as JsonObject) : null;
+                
+                // The path for this row
+                const rowPath = `${path}.${realIndex}`;
 
                 return (
                     <tr key={realIndex} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
@@ -402,11 +459,17 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                     {columnDefs.map((def) => {
                         if (def.type === 'simple') {
                              const hasKey = rowObj && rowObj.hasOwnProperty(def.key);
+                             const cellPath = `${rowPath}.${def.key}`;
                              return (
                                 <td key={def.key} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top last:border-r-0 text-xs overflow-hidden relative group/cell">
                                     {hasKey ? (
                                         <>
-                                            <DispatcherNode data={rowObj![def.key]} name={def.key} depth={depth + 1} />
+                                            <DispatcherNode 
+                                                data={rowObj![def.key]} 
+                                                name={def.key} 
+                                                depth={depth + 1} 
+                                                path={cellPath}
+                                            />
                                             <button 
                                                 onClick={(e) => openInspectModal(e, rowObj![def.key], def.key)}
                                                 className="absolute top-1 right-1 opacity-0 group-hover/cell:opacity-100 bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 p-1 rounded text-indigo-500 hover:text-indigo-600 hover:scale-110 transition-all z-10"
@@ -426,11 +489,19 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                             const isParentObj = parentVal && typeof parentVal === 'object' && !Array.isArray(parentVal);
                             const parentObj = isParentObj ? (parentVal as JsonObject) : null;
 
-                            return def.subColumns?.map(subKey => (
+                            return def.subColumns?.map(subCol => {
+                                const subKey = subCol.key;
+                                const cellPath = `${rowPath}.${def.key}.${subKey}`;
+                                return (
                                 <td key={`${def.key}-${subKey}`} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs overflow-hidden relative group/cell">
                                     {(parentObj && parentObj.hasOwnProperty(subKey)) ? (
                                         <>
-                                            <DispatcherNode data={parentObj[subKey]} name={subKey} depth={depth + 1} />
+                                            <DispatcherNode 
+                                                data={parentObj[subKey]} 
+                                                name={subKey} 
+                                                depth={depth + 1} 
+                                                path={cellPath}
+                                            />
                                             <button 
                                                 onClick={(e) => openInspectModal(e, parentObj[subKey], `${def.key}.${subKey}`)}
                                                 className="absolute top-1 right-1 opacity-0 group-hover/cell:opacity-100 bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 p-1 rounded text-indigo-500 hover:text-indigo-600 hover:scale-110 transition-all z-10"
@@ -443,7 +514,8 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                                         <span className="text-gray-200 dark:text-gray-800 text-xs select-none">.</span>
                                     )}
                                 </td>
-                            ));
+                                );
+                            });
                         }
                     })}
                     </tr>
@@ -471,11 +543,13 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
 
   // List View (Fallback)
   return (
-    <div className="my-1 inline-flex flex-col items-start text-left">
+    <div className={`my-1 inline-flex flex-col items-start text-left ${isActive ? 'ring-2 ring-yellow-300 dark:ring-yellow-700/50 rounded' : ''}`} ref={nodeRef}>
         {!isRoot && (
             <div 
-                className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-2 py-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium relative z-10 -mb-px"
-                onClick={() => setExpanded(false)}
+                className={`bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-2 py-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium relative z-10 -mb-px
+                    ${isActive ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' : ''}
+                `}
+                onClick={handleHeaderClick}
             >
                 <ChevronDown size={10} className="mr-1 opacity-70" />
                 <span>Array (List)</span>
@@ -513,7 +587,12 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                             {realIndex}
                         </td>
                         <td className="border-b border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs">
-                            <DispatcherNode data={item} name={realIndex.toString()} depth={depth + 1} />
+                            <DispatcherNode 
+                                data={item} 
+                                name={realIndex.toString()} 
+                                depth={depth + 1} 
+                                path={`${path}.${realIndex}`}
+                            />
                         </td>
                         </tr>
                     );

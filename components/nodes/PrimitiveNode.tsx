@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useContext, useRef, useEffect } from 'react';
 import { NodeProps } from '../../types';
 import { DispatcherNode } from './DispatcherNode';
 import { Quote, FileJson, FileText, Sigma } from 'lucide-react';
 import { Marked } from 'marked';
 import katex from 'katex';
+import { ViewerContext } from '../ViewerContext';
 
 // --- Markdown + Math Configuration ---
 
@@ -85,8 +87,24 @@ interface DetectedContent {
 
 const TRUNCATE_LENGTH = 200;
 
-export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTruncation = false }) => {
+export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTruncation = false, path }) => {
   const [isParsedView, setIsParsedView] = useState(true);
+  const { activePath, onPathSelect } = useContext(ViewerContext);
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  const isActive = activePath === path;
+
+  // Auto-scroll into view if active (optional, handled by App scroll mainly, but good for nested views)
+  useEffect(() => {
+      if (isActive && nodeRef.current) {
+          nodeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+  }, [isActive]);
+
+  const handleInteraction = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onPathSelect(path);
+  };
 
   const detected: DetectedContent | null = useMemo(() => {
     if (typeof data !== 'string') return null;
@@ -128,7 +146,6 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
     if (markedInstance && markdownRegex.test(sample)) {
        try {
          const html = markedInstance.parse(data) as string;
-         // Simple check if we actually rendered any katex (class="katex")
          const hasMath = html.includes('class="katex"');
          return { type: 'markdown', content: html, hasMath };
        } catch (e) {
@@ -139,8 +156,23 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
     return null;
   }, [data]);
 
+  // Base styles for bidirectional link
+  const containerClass = `transition-all duration-300 rounded px-1 -ml-1 border ${
+      isActive 
+      ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 shadow-sm scale-[1.02]' 
+      : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'
+  }`;
+
   if (data === null) {
-    return <span className="text-gray-400 dark:text-gray-500 italic text-xs">null</span>;
+    return (
+        <span 
+            ref={nodeRef as any}
+            onClick={handleInteraction}
+            className={`text-gray-400 dark:text-gray-500 italic text-xs cursor-pointer ${containerClass}`}
+        >
+            null
+        </span>
+    );
   }
 
   if (typeof data === 'string') {
@@ -150,7 +182,11 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
        const hasMath = detected.hasMath;
 
        return (
-         <div className={`inline-block align-top my-0.5 w-full ${disableTruncation ? '' : 'max-w-full min-w-[200px]'}`}>
+         <div 
+            ref={nodeRef}
+            onClick={handleInteraction}
+            className={`inline-block align-top my-0.5 w-full ${disableTruncation ? '' : 'max-w-full min-w-[200px]'} ${containerClass}`}
+         >
             <div className="flex items-center gap-2 mb-1">
                <button
                   onClick={(e) => {
@@ -182,7 +218,7 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
             {isParsedView ? (
                 isJson ? (
                     <div className="border-l-2 border-indigo-200 dark:border-indigo-800 pl-2 py-1 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-r">
-                        <DispatcherNode data={detected.content} depth={depth + 1} disableTruncation={disableTruncation} />
+                        <DispatcherNode data={detected.content} depth={depth + 1} disableTruncation={disableTruncation} path={`${path}.parsed`} />
                     </div>
                 ) : (
                     <div 
@@ -206,12 +242,15 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
     }
 
     // -- Regular String --
-    // If truncation is disabled (Inspector Mode), we show full text
     const shouldTruncate = !disableTruncation && data.length > TRUNCATE_LENGTH;
     const displayData = shouldTruncate ? data.slice(0, TRUNCATE_LENGTH) + '...' : data;
 
     return (
-      <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs">
+      <span 
+        ref={nodeRef as any}
+        onClick={handleInteraction}
+        className={`text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs cursor-pointer ${containerClass}`}
+      >
         "{displayData}"
         {shouldTruncate && (
            <span className="text-gray-400 dark:text-gray-500 text-[10px] ml-1 italic opacity-70">(truncated)</span>
@@ -221,11 +260,27 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
   }
 
   if (typeof data === 'number') {
-    return <span className="text-blue-600 dark:text-blue-400 font-mono text-xs">{data}</span>;
+    return (
+        <span 
+            ref={nodeRef as any}
+            onClick={handleInteraction}
+            className={`text-blue-600 dark:text-blue-400 font-mono text-xs cursor-pointer ${containerClass}`}
+        >
+            {data}
+        </span>
+    );
   }
 
   if (typeof data === 'boolean') {
-    return <span className="text-purple-600 dark:text-purple-400 font-bold text-xs">{data.toString()}</span>;
+    return (
+        <span 
+            ref={nodeRef as any}
+            onClick={handleInteraction}
+            className={`text-purple-600 dark:text-purple-400 font-bold text-xs cursor-pointer ${containerClass}`}
+        >
+            {data.toString()}
+        </span>
+    );
   }
 
   return <span className="text-gray-500 text-xs">{String(data)}</span>;
