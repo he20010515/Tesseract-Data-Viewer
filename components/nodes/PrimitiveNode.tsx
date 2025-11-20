@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { NodeProps } from '../../types';
 import { DispatcherNode } from './DispatcherNode';
-import { Braces, Quote, FileJson, FileText, Sigma, ChevronDown, ChevronUp } from 'lucide-react';
+import { Quote, FileJson, FileText, Sigma } from 'lucide-react';
 import { Marked } from 'marked';
 import katex from 'katex';
 
 // --- Markdown + Math Configuration ---
 
-// Create a dedicated Marked instance to avoid global pollution
-const marked = new Marked();
+let markedInstance: Marked | null = null;
+try {
+    markedInstance = new Marked();
+} catch (e) {
+    console.warn("Failed to initialize marked", e);
+}
 
 // Custom extension for Inline Math: $ E=mc^2 $
 const inlineMathExtension = {
@@ -68,8 +72,10 @@ const blockMathExtension = {
   }
 };
 
-// Register extensions
-marked.use({ extensions: [blockMathExtension, inlineMathExtension] });
+// Register extensions if marked is available
+if (markedInstance) {
+    markedInstance.use({ extensions: [blockMathExtension, inlineMathExtension] });
+}
 
 interface DetectedContent {
   type: 'json' | 'markdown';
@@ -79,9 +85,8 @@ interface DetectedContent {
 
 const TRUNCATE_LENGTH = 200;
 
-export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
+export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTruncation = false }) => {
   const [isParsedView, setIsParsedView] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   const detected: DetectedContent | null = useMemo(() => {
     if (typeof data !== 'string') return null;
@@ -120,9 +125,9 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
     // Check for Markdown syntax OR Math delimiters ($ or $$)
     const markdownRegex = /(^#+\s|^[-*+]\s|^>\s|^\s*```|\[.+\]\(.+\)|\*\*.+\*\*|\$[^$]+\$)/m;
     
-    if (markdownRegex.test(sample)) {
+    if (markedInstance && markdownRegex.test(sample)) {
        try {
-         const html = marked.parse(data) as string;
+         const html = markedInstance.parse(data) as string;
          // Simple check if we actually rendered any katex (class="katex")
          const hasMath = html.includes('class="katex"');
          return { type: 'markdown', content: html, hasMath };
@@ -142,11 +147,10 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
     // -- Parsed Content (JSON/Markdown) --
     if (detected) {
        const isJson = detected.type === 'json';
-       const isMarkdown = detected.type === 'markdown';
        const hasMath = detected.hasMath;
 
        return (
-         <div className="inline-block align-top max-w-full my-0.5 w-full min-w-[200px]">
+         <div className={`inline-block align-top my-0.5 w-full ${disableTruncation ? '' : 'max-w-full min-w-[200px]'}`}>
             <div className="flex items-center gap-2 mb-1">
                <button
                   onClick={(e) => {
@@ -178,7 +182,7 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
             {isParsedView ? (
                 isJson ? (
                     <div className="border-l-2 border-indigo-200 dark:border-indigo-800 pl-2 py-1 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-r">
-                        <DispatcherNode data={detected.content} depth={depth + 1} />
+                        <DispatcherNode data={detected.content} depth={depth + 1} disableTruncation={disableTruncation} />
                     </div>
                 ) : (
                     <div 
@@ -188,7 +192,11 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
                 )
             ) : (
                 <div className="relative">
-                   <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs block max-w-[400px] overflow-x-auto border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-1.5 rounded max-h-[300px] overflow-y-auto custom-scrollbar">
+                   <span 
+                     className={`text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs block overflow-x-auto border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-1.5 rounded custom-scrollbar
+                        ${disableTruncation ? '' : 'max-w-[400px] max-h-[300px] overflow-y-auto'}
+                     `}
+                   >
                       "{data}"
                    </span>
                 </div>
@@ -198,42 +206,27 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0 }) => {
     }
 
     // -- Regular String --
-    const shouldTruncate = data.length > TRUNCATE_LENGTH;
-    
+    // If truncation is disabled (Inspector Mode), we show full text
+    const shouldTruncate = !disableTruncation && data.length > TRUNCATE_LENGTH;
+    const displayData = shouldTruncate ? data.slice(0, TRUNCATE_LENGTH) + '...' : data;
+
     return (
-      <div className="inline-flex flex-col items-start max-w-[400px]">
-        <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap leading-relaxed">
-          "{shouldTruncate && !isExpanded ? data.slice(0, TRUNCATE_LENGTH) + '...' : data}"
-        </span>
+      <span className="text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs">
+        "{displayData}"
         {shouldTruncate && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="mt-1 text-[10px] text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 flex items-center gap-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 px-1 py-0.5 rounded transition-colors"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp size={10} /> Show Less
-              </>
-            ) : (
-              <>
-                <ChevronDown size={10} /> Show More ({data.length - TRUNCATE_LENGTH} chars)
-              </>
-            )}
-          </button>
+           <span className="text-gray-400 dark:text-gray-500 text-[10px] ml-1 italic opacity-70">(truncated)</span>
         )}
-      </div>
+      </span>
     );
   }
 
-  switch (typeof data) {
-    case 'number':
-      return <span className="text-blue-600 dark:text-blue-400 font-semibold">{data}</span>;
-    case 'boolean':
-      return <span className="text-purple-600 dark:text-purple-400 font-bold">{data ? 'true' : 'false'}</span>;
-    default:
-      return <span className="text-gray-700 dark:text-gray-300">{String(data)}</span>;
+  if (typeof data === 'number') {
+    return <span className="text-blue-600 dark:text-blue-400 font-mono text-xs">{data}</span>;
   }
+
+  if (typeof data === 'boolean') {
+    return <span className="text-purple-600 dark:text-purple-400 font-bold text-xs">{data.toString()}</span>;
+  }
+
+  return <span className="text-gray-500 text-xs">{String(data)}</span>;
 };

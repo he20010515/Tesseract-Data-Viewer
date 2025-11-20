@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -25,25 +26,80 @@
                 900: '#111827',
                 950: '#030712',
               }
+            },
+            lineHeight: {
+              'relaxed': '1.625rem', // Enforce specific pixel height for code editor alignment
             }
           }
         }
       }
     </script>
-    <script type="importmap">
-    {
-      "imports": {
-        "react/": "https://aistudiocdn.com/react@^19.2.0/",
-        "react": "https://aistudiocdn.com/react@^19.2.0",
-        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-        "marked": "https://esm.sh/marked@12.0.0",
-        "katex": "https://esm.sh/katex@0.16.9"
+    <style>
+      /* Global Scrollbar Styling */
+      
+      /* Webkit browsers (Chrome, Safari, Edge) */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
       }
-    }
-    </script>
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background-color: #d1d5db; /* gray-300 */
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: #9ca3af; /* gray-400 */
+      }
+
+      ::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+
+      /* Dark Mode Overrides */
+      html.dark {
+        color-scheme: dark; /* Tells browser to use dark system UI for inputs/scrollbars */
+      }
+
+      .dark ::-webkit-scrollbar-thumb {
+        background-color: #374151; /* gray-700 */
+      }
+
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background-color: #4b5563; /* gray-600 */
+      }
+
+      /* Firefox */
+      html {
+        scrollbar-width: thin;
+        scrollbar-color: #d1d5db transparent;
+      }
+
+      html.dark {
+        scrollbar-color: #374151 transparent;
+      }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "marked": "https://esm.sh/marked@12.0.0",
+    "katex": "https://esm.sh/katex@0.16.9",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0"
+  }
+}
+</script>
   </head>
-  <body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased">
+  <body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased transition-colors duration-200">
     <div id="root"></div>
   </body>
 </html>

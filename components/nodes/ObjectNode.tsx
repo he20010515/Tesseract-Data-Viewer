@@ -1,17 +1,18 @@
-import React, { useState, useMemo, useRef, useContext, useEffect } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { NodeProps, JsonObject } from '../../types';
 import { DispatcherNode } from './DispatcherNode';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { ViewerContext } from '../ViewerContext';
+import { PaginationControl } from '../PaginationControl';
 
-const ROW_HEIGHT = 30; // Reduced from 34
-const MAX_CONTAINER_HEIGHT = 500;
-const VIRTUALIZATION_THRESHOLD = 100;
+const DEFAULT_PAGE_SIZE = 50;
 
 export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 }) => {
   const [expanded, setExpanded] = useState<boolean>(!!isRoot || depth < 1);
-  const [scrollTop, setScrollTop] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const { expandAllToken, collapseAllToken } = useContext(ViewerContext);
 
@@ -34,6 +35,11 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
   const length = keys.length;
   const isEmpty = length === 0;
 
+  // Reset page if keys change significantly
+  useEffect(() => {
+      setPage(1);
+  }, [length]);
+
   if (!expanded && !isRoot) {
     return (
       <button
@@ -47,34 +53,19 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
     );
   }
 
-  const isVirtual = length > VIRTUALIZATION_THRESHOLD;
+  // Pagination Logic
+  const totalPages = Math.ceil(length / pageSize);
+  const start = (page - 1) * pageSize;
+  const visibleKeys = keys.slice(start, start + pageSize);
 
-  // Virtualization Calculations
-  const visibleCount = isVirtual ? Math.ceil(MAX_CONTAINER_HEIGHT / ROW_HEIGHT) + 10 : length;
-  const startIndex = isVirtual ? Math.floor(scrollTop / ROW_HEIGHT) : 0;
-  const effectiveStartIndex = Math.max(0, startIndex - 5); // Buffer
-  const effectiveEndIndex = Math.min(length, effectiveStartIndex + visibleCount);
-  
-  const visibleKeys = isVirtual 
-    ? keys.slice(effectiveStartIndex, effectiveEndIndex) 
-    : keys;
-
-  const paddingTop = isVirtual ? effectiveStartIndex * ROW_HEIGHT : 0;
-  const paddingBottom = isVirtual ? (length - effectiveEndIndex) * ROW_HEIGHT : 0;
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isVirtual) {
-        setScrollTop(e.currentTarget.scrollTop);
-    }
-  };
-
-  const containerStyles = isVirtual ? { maxHeight: MAX_CONTAINER_HEIGHT, overflowY: 'auto' as const } : {};
+  const handlePageChange = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
+  const handlePageSizeChange = (s: number) => { setPageSize(s); setPage(1); };
 
   return (
-    <div className="min-w-[100px] my-1">
+    <div className="min-w-[100px] my-1 inline-flex flex-col items-start text-left">
        {!isRoot && (
         <div 
-            className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-1.5 py-0.5 mb-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium"
+            className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] px-2 py-0.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 inline-flex items-center rounded-t border-t border-l border-r border-gray-200 dark:border-gray-700 select-none font-medium relative z-10 -mb-px"
             onClick={() => setExpanded(false)}
         >
              <ChevronDown size={10} className="mr-1 opacity-70" />
@@ -85,31 +76,32 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
       {isEmpty ? (
         <div className="text-gray-400 dark:text-gray-500 italic pl-2 text-xs">{'{}'}</div>
       ) : (
-        <div 
-            className="overflow-hidden rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900 custom-scrollbar"
-            ref={containerRef}
-            onScroll={handleScroll}
-            style={containerStyles}
-        >
-            <table className="border-collapse w-full text-sm relative">
-                <thead className="sticky top-0 z-10 shadow-sm">
+        <div className={`overflow-hidden shadow-sm bg-white dark:bg-gray-900 inline-block border border-gray-200 dark:border-gray-700 ${!isRoot ? 'rounded-b-sm rounded-tr-sm rounded-tl-none' : 'rounded-sm'}`}>
+            
+            <PaginationControl 
+                currentPage={page}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={length}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                noun="keys"
+            />
+
+            <table className="border-collapse w-auto text-sm relative">
+                <thead>
                     <tr>
-                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-min whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-min whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-left">
                             Key
                         </th>
-                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 w-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-left">
                             Value
                         </th>
                     </tr>
                 </thead>
                 <tbody>
-                {paddingTop > 0 && (
-                    <tr>
-                        <td colSpan={2} style={{ height: paddingTop, padding: 0, border: 0 }}></td>
-                    </tr>
-                )}
                 {visibleKeys.map((key) => (
-                    <tr key={key} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" style={{ height: ROW_HEIGHT }}>
+                    <tr key={key} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <td className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top bg-gray-50/30 dark:bg-gray-900/50 w-min whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 select-text">
                             {key}
                         </td>
@@ -118,13 +110,20 @@ export const ObjectNode: React.FC<NodeProps> = ({ data, name, isRoot, depth = 0 
                         </td>
                     </tr>
                 ))}
-                {paddingBottom > 0 && (
-                    <tr>
-                        <td colSpan={2} style={{ height: paddingBottom, padding: 0, border: 0 }}></td>
-                    </tr>
-                )}
                 </tbody>
             </table>
+            
+            {totalPages > 1 && (
+                <PaginationControl 
+                    currentPage={page}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    totalItems={length}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    noun="keys"
+                />
+            )}
         </div>
       )}
     </div>

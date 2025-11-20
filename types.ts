@@ -17,6 +17,7 @@ export interface NodeProps {
   name?: string | number; // The key or index leading to this node
   isRoot?: boolean;
   depth?: number;
+  disableTruncation?: boolean;
 }
 
 export interface ViewConfig {
