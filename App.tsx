@@ -521,7 +521,7 @@ const App: React.FC = () => {
            </div>
           
           {/* Infinite Canvas */}
-          <div className="flex-1 overflow-auto p-6 bg-gray-50/50 dark:bg-gray-950 custom-scrollbar">
+          <div className="flex-1 overflow-auto p-4 bg-gray-50/50 dark:bg-gray-950 custom-scrollbar">
             {error ? (
               <div className="flex flex-col items-center justify-center h-full text-rose-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-full mb-4">

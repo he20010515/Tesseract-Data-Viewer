@@ -36,26 +36,27 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
   // Update highlighting when value changes
   useEffect(() => {
-    // Debounce for very large typing updates if needed, 
-    // but for reasonable file sizes (<1MB) this is instant.
     setHtmlContent(highlightSyntax(value, language));
   }, [value, language]);
 
   // Generate Line Numbers
   const lineCount = value.split('\n').length;
-  // For massive files, we might cap line numbers, but typical usage is handled by <1MB limit
   const lineNumbers = Array.from({ length: lineCount }, (_, i) => i + 1);
 
+  // Shared styles for perfect alignment
+  const fontStyle = "font-mono text-sm leading-6"; // 24px line height
+  const paddingStyle = "pt-4 pb-4"; // 16px vertical padding
+
   return (
-    <div className="relative flex h-full w-full bg-white dark:bg-gray-900 font-mono text-xs sm:text-sm leading-relaxed overflow-hidden">
+    <div className="relative flex h-full w-full bg-white dark:bg-gray-900 overflow-hidden">
       
       {/* Gutter (Line Numbers) */}
       <div 
         ref={gutterRef}
-        className="shrink-0 w-10 bg-gray-50 dark:bg-gray-900/50 border-r border-gray-100 dark:border-gray-800 text-right select-none overflow-hidden text-gray-400 dark:text-gray-600 py-4 pr-2"
+        className={`shrink-0 w-12 bg-gray-50 dark:bg-gray-900/50 border-r border-gray-100 dark:border-gray-800 text-right select-none overflow-hidden text-gray-400 dark:text-gray-600 ${paddingStyle} pr-3`}
       >
         {lineNumbers.map((n) => (
-            <div key={n} className="h-[1.625rem]">{n}</div> /* 1.625rem matches leading-relaxed (1.625) approx or needs strict sync */
+            <div key={n} className={fontStyle}>{n}</div>
         ))}
       </div>
 
@@ -66,9 +67,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         <pre
           ref={preRef}
           aria-hidden="true"
-          className={`absolute inset-0 p-4 m-0 pointer-events-none overflow-hidden whitespace-pre ${wordWrap ? 'whitespace-pre-wrap' : ''}`}
-          style={{ fontFamily: 'monospace' }} // Ensure exact match
-          dangerouslySetInnerHTML={{ __html: htmlContent + '<br />' }} // Extra break to match textarea behavior
+          className={`absolute inset-0 pl-4 pr-4 m-0 pointer-events-none overflow-hidden whitespace-pre ${paddingStyle} ${fontStyle} ${wordWrap ? 'whitespace-pre-wrap' : ''}`}
+          dangerouslySetInnerHTML={{ __html: htmlContent + '<br />' }}
         />
 
         {/* Foreground: Transparent Textarea for Input */}
@@ -79,8 +79,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           onScroll={handleScroll}
           readOnly={readOnly}
           spellCheck={false}
-          className={`absolute inset-0 w-full h-full p-4 m-0 bg-transparent text-transparent caret-indigo-600 dark:caret-indigo-400 resize-none focus:outline-none z-10 whitespace-pre ${wordWrap ? 'whitespace-pre-wrap' : ''}`}
-          style={{ fontFamily: 'monospace' }} // Ensure exact match
+          className={`absolute inset-0 w-full h-full pl-4 pr-4 m-0 bg-transparent text-transparent caret-indigo-600 dark:caret-indigo-400 resize-none focus:outline-none z-10 whitespace-pre ${paddingStyle} ${fontStyle} ${wordWrap ? 'whitespace-pre-wrap' : ''}`}
         />
       </div>
     </div>

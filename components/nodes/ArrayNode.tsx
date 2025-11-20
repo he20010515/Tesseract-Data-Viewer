@@ -20,6 +20,7 @@ interface ColumnDef {
   key: string;
   type: 'simple' | 'group';
   subColumns?: string[]; // For groups
+  suggestedWidth: WidthMode; // Heuristic-based default width
 }
 
 // Helper Component for the width toggle button
@@ -37,7 +38,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // Column Width State
+  // Column Width State (User Overrides)
   const [colWidths, setColWidths] = useState<Record<string, WidthMode>>({});
 
   // Inspection Modal State
@@ -56,6 +57,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
   // Reset page when data length changes significantly (new file loaded)
   useEffect(() => {
     setPage(1);
+    setColWidths({}); // Reset user width overrides on new data
   }, [data]);
 
   const arrayData = data as JsonValue[];
@@ -76,7 +78,6 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
     if (currentData.length === 0) return { isArrayOfObjects: false, columnDefs: [] };
     
     // 1. Basic Check: Is this mostly an array of objects?
-    // We scan the current page. If the current page is all primitives, we render list view.
     let objectCount = 0;
     for(let i=0; i<currentData.length; i++) {
         const item = currentData[i];
@@ -85,17 +86,18 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
         }
     }
     
-    // If less than 80% of the current page are objects, render as simple list
     if (objectCount / currentData.length < 0.8) return { isArrayOfObjects: false, columnDefs: [] };
 
     // 2. Deep Scan for Keys & Statistics
     const allKeys = new Set<string>();
     
-    // Track stats to decide grouping
     interface KeyStats {
         appearanceCount: number;
         objectCount: number;
         subKeyFreqs: Map<string, number>;
+        // Content heuristics
+        maxStrLength: number;
+        isAllBoolOrNum: boolean;
     }
     const keyStats = new Map<string, KeyStats>();
 
@@ -110,16 +112,32 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
         const val = objItem[k];
         
         if (!keyStats.has(k)) {
-            keyStats.set(k, { appearanceCount: 0, objectCount: 0, subKeyFreqs: new Map() });
+            keyStats.set(k, { 
+                appearanceCount: 0, 
+                objectCount: 0, 
+                subKeyFreqs: new Map(),
+                maxStrLength: 0,
+                isAllBoolOrNum: true
+            });
         }
         const stats = keyStats.get(k)!;
         stats.appearanceCount++;
 
+        // Type analysis
         if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
             stats.objectCount++;
+            stats.isAllBoolOrNum = false; // It's an object
             Object.keys(val).forEach(subKey => {
                 stats.subKeyFreqs.set(subKey, (stats.subKeyFreqs.get(subKey) || 0) + 1);
             });
+        } else {
+            // Primitive analysis
+            if (typeof val === 'string') {
+                stats.maxStrLength = Math.max(stats.maxStrLength, val.length);
+                stats.isAllBoolOrNum = false;
+            } else if (typeof val !== 'number' && typeof val !== 'boolean' && val !== null) {
+                stats.isAllBoolOrNum = false; // e.g. array
+            }
         }
       });
     }
@@ -131,7 +149,9 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
         const stats = keyStats.get(key);
         let type: 'simple' | 'group' = 'simple';
         let subColumns: string[] = [];
+        let suggestedWidth: WidthMode = 'medium';
 
+        // Group Detection Logic
         if (stats && stats.objectCount > 0) {
             const isConsistentlyObject = (stats.objectCount / stats.appearanceCount) > 0.85;
 
@@ -139,39 +159,71 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 const distinctSubKeys = Array.from(stats.subKeyFreqs.keys());
                 const distinctCount = distinctSubKeys.length;
                 
-                if (distinctCount > 0 && distinctCount <= 7) {
-                    const totalSlots = distinctCount * stats.objectCount;
-                    const filledSlots = Array.from(stats.subKeyFreqs.values()).reduce((a, b) => a + b, 0);
-                    const density = totalSlots > 0 ? filledSlots / totalSlots : 0;
-
-                    if (distinctCount <= 2 || density > 0.40) {
-                        type = 'group';
-                        subColumns = distinctSubKeys.sort();
-                    }
+                // Heuristic: Only group if it's not too messy (small number of subkeys)
+                if (distinctCount > 0 && distinctCount <= 5) {
+                     type = 'group';
+                     subColumns = distinctSubKeys.sort();
                 }
             }
         }
 
-        defs.push({ key, type, subColumns });
+        // Width Heuristic Logic
+        if (type === 'simple' && stats) {
+             if (
+                 key === 'id' || 
+                 key.endsWith('_id') || 
+                 key === 'index' || 
+                 stats.isAllBoolOrNum ||
+                 stats.maxStrLength < 10
+             ) {
+                 suggestedWidth = 'compact';
+             } else if (stats.maxStrLength > 60) {
+                 suggestedWidth = 'wide';
+             }
+        }
+        
+        // Note: For groups, suggestedWidth applies to the parent (though unused in UI now)
+        // Logic could be extended to subColumns, but for now we default subColumns to 'medium' or 'compact'
+        // in the render loop, or we could change the data structure to store per-subcolumn width.
+        // For simplicity, we'll keep subcolumns as 'medium' default unless overridden.
+
+        defs.push({ key, type, subColumns, suggestedWidth });
     });
     
     return { isArrayOfObjects: true, columnDefs: defs };
-  }, [visibleData]); // Re-calculate when page changes
+  }, [visibleData]); 
 
   // --- Helpers ---
 
   const toggleColWidth = (key: string) => {
     setColWidths(prev => {
-        const current = prev[key] || 'medium';
+        // Find default from definition
+        let defaultWidth: WidthMode = 'medium';
+        // Check root columns
+        const rootDef = columnDefs.find(d => d.key === key);
+        if (rootDef) {
+             defaultWidth = rootDef.suggestedWidth;
+        } else {
+             // Check subcolumns: "parent.child"
+             const [parent, child] = key.split('.');
+             // For subcolumns, we default to medium for now as we didn't calculate deep stats
+             // But we can infer from key name
+             if (child === 'id' || child === 'value') defaultWidth = 'compact';
+        }
+
+        const current = prev[key] || defaultWidth;
         const next: WidthMode = current === 'compact' ? 'medium' : current === 'medium' ? 'wide' : 'compact';
         return { ...prev, [key]: next };
     });
   };
 
-  const getWidthClass = (key: string) => WIDTH_CLASSES[colWidths[key] || 'medium'];
+  const getWidthClass = (key: string, fallback: WidthMode = 'medium') => {
+      const mode = colWidths[key] || fallback;
+      return WIDTH_CLASSES[mode];
+  };
   
-  const getWidthIcon = (key: string) => {
-      const mode = colWidths[key] || 'medium';
+  const getWidthIcon = (key: string, fallback: WidthMode = 'medium') => {
+      const mode = colWidths[key] || fallback;
       if (mode === 'compact') return <Minimize2 size={10} />;
       if (mode === 'wide') return <Maximize2 size={10} />;
       return <LayoutTemplateIcon size={10} />;
@@ -188,7 +240,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
 
   const handlePageSizeChange = (newSize: number) => {
       setPageSize(newSize);
-      setPage(1); // Reset to page 1 on size change to avoid out of bounds
+      setPage(1); 
   };
 
   // --- Render ---
@@ -262,7 +314,6 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
         
         <div className={`border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900 inline-block max-w-full ${!isRoot ? 'rounded-b-sm rounded-tr-sm rounded-tl-none' : 'rounded-sm'}`}>
             
-            {/* Pagination TOP */}
             <PaginationControl 
                 currentPage={page}
                 totalPages={totalPages}
@@ -290,18 +341,18 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                                     ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' 
                                     : 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800'
                                 }
-                                ${def.type === 'simple' ? getWidthClass(def.key) : ''}
+                                ${def.type === 'simple' ? getWidthClass(def.key, def.suggestedWidth) : ''}
                             `}
                         >
                             <div className="flex items-center justify-between gap-2 group/header">
-                                <span className="truncate">{def.key}</span>
+                                <span className="truncate" title={def.key}>{def.key}</span>
                                 {def.type === 'simple' && (
                                     <button 
                                         onClick={() => toggleColWidth(def.key)}
                                         className="opacity-0 group-hover/header:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all text-gray-400 hover:text-gray-600"
                                         title="Cycle Width"
                                     >
-                                        {getWidthIcon(def.key)}
+                                        {getWidthIcon(def.key, def.suggestedWidth)}
                                     </button>
                                 )}
                             </div>
@@ -313,19 +364,22 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                          if (def.type !== 'group' || !def.subColumns) return null;
                          return def.subColumns.map(subKey => {
                              const fullKey = `${def.key}.${subKey}`;
+                             // Simple heuristic for subkeys
+                             const subDefaultWidth = (subKey === 'id' || subKey === 'value') ? 'compact' : 'medium';
+
                              return (
                                 <th 
                                     key={fullKey}
-                                    className={`border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider overflow-hidden ${getWidthClass(fullKey)}`}
+                                    className={`border-b border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-1 text-left text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider overflow-hidden ${getWidthClass(fullKey, subDefaultWidth)}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 group/header">
-                                        <span className="truncate">{subKey}</span>
+                                        <span className="truncate" title={subKey}>{subKey}</span>
                                         <button 
                                             onClick={() => toggleColWidth(fullKey)}
                                             className="opacity-0 group-hover/header:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all text-gray-400 hover:text-gray-600"
                                             title="Cycle Width"
                                         >
-                                            {getWidthIcon(fullKey)}
+                                            {getWidthIcon(fullKey, subDefaultWidth)}
                                         </button>
                                     </div>
                                 </th>
@@ -399,7 +453,6 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
             </table>
             </div>
             
-            {/* Pagination BOTTOM */}
             {totalPages > 1 && (
                  <PaginationControl 
                     currentPage={page}
@@ -430,7 +483,6 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
          )}
         <div className={`overflow-hidden shadow-sm bg-white dark:bg-gray-900 inline-block border border-gray-200 dark:border-gray-700 ${!isRoot ? 'rounded-b-sm rounded-tr-sm rounded-tl-none' : 'rounded-sm'}`}>
             
-             {/* Pagination TOP */}
              <PaginationControl 
                 currentPage={page}
                 totalPages={totalPages}
@@ -469,7 +521,6 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0 }) => {
                 </tbody>
             </table>
             
-             {/* Pagination BOTTOM */}
              {totalPages > 1 && (
                  <PaginationControl 
                     currentPage={page}
