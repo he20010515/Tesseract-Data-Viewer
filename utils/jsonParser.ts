@@ -60,6 +60,17 @@ export const parseJsonWithSourceMap = (input: string): ParsedResult => {
     } else if (char === 'n') {
       expect('null');
       value = null;
+    } else if (char === 'N') {
+      expect('NaN');
+      value = null; // Convert NaN to null for valid JSON
+    } else if (char === 'I') {
+      expect('Infinity');
+      value = null; // Convert Infinity to null
+    } else if (char === '-' && input[i+1] === 'I') {
+       // Handle -Infinity
+       i++; column++; // eat '-'
+       expect('Infinity');
+       value = null; // Convert -Infinity to null
     } else if (char === '-' || (char >= '0' && char <= '9')) {
       value = parseNumber();
     } else {
@@ -98,6 +109,9 @@ export const parseJsonWithSourceMap = (input: string): ParsedResult => {
       
       if (input[i] === '}') break;
 
+      // Allow unquoted keys? No, let's stick to standard JSON for keys for now, 
+      // unless we really need to support loose keys too. 
+      // But the user issue is specifically about values (NaN).
       if (input[i] !== '"') error("Expected string key");
       
       // Parse Key
@@ -217,8 +231,25 @@ export const parseJsonWithSourceMap = (input: string): ParsedResult => {
 
   try {
     const data = parseValue("root");
+    
+    // Strict EOF check: Ensure we consumed the entire input (ignoring trailing whitespace)
+    skipWhitespace();
+    if (i < input.length) {
+        error(`Unexpected character '${input[i]}' after JSON data (Expected EOF)`);
+    }
+
     return { data, sourceMap };
   } catch (e: any) {
     return { data: null, sourceMap: new Map(), error: e.message };
   }
+};
+
+/**
+ * Parses JSON but handles NaN, Infinity, -Infinity by converting them to null.
+ * Returns just the data, no source map.
+ */
+export const parseLooseJson = (input: string): JsonValue => {
+    const { data, error } = parseJsonWithSourceMap(input);
+    if (error) throw new Error(error);
+    return data;
 };

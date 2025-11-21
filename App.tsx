@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import './components/PrismTheme.css';
 import { JsonViewer } from './components/JsonViewer';
 import { CodeEditor } from './components/CodeEditor';
 import { JsonValue, JsonSourceMap } from './types';

@@ -1,4 +1,5 @@
 import { JsonValue } from '../types';
+import { parseLooseJson } from './jsonParser';
 
 export const tryParseJSONL = (text: string): JsonValue[] => {
   const lines = text.trim().split(/\r?\n/);
@@ -11,9 +12,15 @@ export const tryParseJSONL = (text: string): JsonValue[] => {
     try {
       result.push(JSON.parse(trimmed));
     } catch (e) {
-      // Skip invalid lines or re-throw depending on strictness requirements
-      // For now, we'll be lenient with empty lines but strict with bad JSON
-      if (trimmed.length > 0) throw e; 
+      // If standard JSON parse fails, try our loose parser (handles NaN, Infinity)
+      try {
+          result.push(parseLooseJson(trimmed));
+      } catch (looseErr) {
+          // If both fail, re-throw the original error (or maybe the loose one?)
+          // Let's throw the original one as it's likely more standard, unless looseErr is more specific.
+          // Actually, if loose parser fails, it means it's really not valid.
+          if (trimmed.length > 0) throw e; 
+      }
     }
   }
   return result;

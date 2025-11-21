@@ -1,0 +1,4 @@
+{"index": 0, "loss": 1.359375, "is_outlier": false, "z_score": NaN}
+{"index": 1, "loss": 0.271484375, "is_outlier": false, "z_score": Infinity}
+{"index": 2, "loss": 0.03662109375, "is_outlier": false, "z_score": -Infinity}
+{"index": 3, "loss": 6.4849853515625e-05, "is_outlier": false, "z_score": null}

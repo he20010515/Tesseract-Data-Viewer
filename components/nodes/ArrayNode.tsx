@@ -99,6 +99,8 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0, path }
     if (currentData.length === 0) return { isArrayOfObjects: false, columnDefs: [] };
     
     // 1. Basic Check: Is this mostly an array of objects?
+    // We lowered the threshold to allow mixed content or sparse objects to be viewed as a table.
+    // If there are ANY objects, we'll try to find columns.
     let objectCount = 0;
     for(let i=0; i<currentData.length; i++) {
         const item = currentData[i];
@@ -107,7 +109,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0, path }
         }
     }
     
-    if (objectCount / currentData.length < 0.8) return { isArrayOfObjects: false, columnDefs: [] };
+    if (objectCount === 0) return { isArrayOfObjects: false, columnDefs: [] };
 
     // 2. Deep Scan for Keys & Statistics
     const allKeys = new Set<string>();
