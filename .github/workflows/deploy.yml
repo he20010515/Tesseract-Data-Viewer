@@ -20,16 +20,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm' # 开启缓存加速
 
       - name: Install dependencies
-        # --include=dev 确保安装了 vite 等开发工具
-        run: npm install --include=dev --legacy-peer-deps
+        # 强制清除以前可能残留的错误安装，干净地安装
+        run: npm install --include=dev
 
       - name: Build
-        # 使用 npx 直接运行，避开 sh 找不到命令的问题
-        run: npx vite build
-        env:
-          NODE_ENV: production
+        # 直接运行 npm 脚本，这样它会严格使用 node_modules 里的 vite 6.2.0
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
