@@ -233,7 +233,7 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
                         ${disableTruncation ? '' : 'max-w-[400px] max-h-[300px] overflow-y-auto'}
                      `}
                    >
-                      "{data}"
+                      {data}
                    </span>
                 </div>
             )}
@@ -251,7 +251,7 @@ export const PrimitiveNode: React.FC<NodeProps> = ({ data, depth = 0, disableTru
         onClick={handleInteraction}
         className={`text-emerald-600 dark:text-emerald-400 break-words whitespace-pre-wrap font-mono text-xs cursor-pointer ${containerClass}`}
       >
-        "{displayData}"
+        {displayData}
         {shouldTruncate && (
            <span className="text-gray-400 dark:text-gray-500 text-[10px] ml-1 italic opacity-70">(truncated)</span>
         )}
