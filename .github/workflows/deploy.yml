@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ] # 确认你的主分支叫 main
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -20,13 +20,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        # --include=dev 确保安装了 vite 等开发工具
+        run: npm install --include=dev --legacy-peer-deps
 
       - name: Build
-        run: npm run build
+        # 使用 npx 直接运行，避开 sh 找不到命令的问题
+        run: npx vite build
+        env:
+          NODE_ENV: production
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
