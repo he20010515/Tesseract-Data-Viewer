@@ -6,6 +6,7 @@ import { ChevronDown, ScanSearch, X, Minimize2, Maximize2 } from 'lucide-react';
 import { ViewerContext } from '../ViewerContext';
 import { createPortal } from 'react-dom';
 import { PaginationControl } from '../PaginationControl';
+import './NodeStyles.css';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -495,7 +496,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0, path }
                                 const subKey = subCol.key;
                                 const cellPath = `${rowPath}.${def.key}.${subKey}`;
                                 return (
-                                <td key={`${def.key}-${subKey}`} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs overflow-hidden relative group/cell">
+                                <td key={`${def.key}-${subKey}`} className="border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1 align-top text-xs overflow-hidden relative group/cell cell-hover-trigger">
                                     {(parentObj && parentObj.hasOwnProperty(subKey)) ? (
                                         <>
                                             <DispatcherNode 
@@ -506,7 +507,7 @@ export const ArrayNode: React.FC<NodeProps> = ({ data, isRoot, depth = 0, path }
                                             />
                                             <button 
                                                 onClick={(e) => openInspectModal(e, parentObj[subKey], `${def.key}.${subKey}`)}
-                                                className="absolute top-1 right-1 opacity-0 group-hover/cell:opacity-100 bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 p-1 rounded text-indigo-500 hover:text-indigo-600 hover:scale-110 transition-all z-10"
+                                                className="absolute top-1 right-1 opacity-0 cell-inspect-btn bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 p-1 rounded text-indigo-500 hover:text-indigo-600 hover:scale-110 transition-all z-10"
                                                 title="Inspect Full Content"
                                             >
                                                 <ScanSearch size={12} />

@@ -1,0 +1,23 @@
+/* Custom hover logic for Inspect Button to prevent nested triggers */
+
+/* 
+   By default, the button is hidden (opacity-0 in Tailwind).
+   We override it here when hovered.
+*/
+.cell-hover-trigger:hover > .cell-inspect-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 
+   The Magic Fix:
+   If a nested cell (which also has .cell-hover-trigger) is hovered,
+   this selector matches the PARENT cell.
+   We force the parent's button to hide, so only the inner button is visible.
+   
+   Browser Support: Chrome 105+, Safari 15.4+, Firefox 121+
+*/
+.cell-hover-trigger:hover:has(.cell-hover-trigger:hover) > .cell-inspect-btn {
+  opacity: 0;
+  pointer-events: none;
+}
