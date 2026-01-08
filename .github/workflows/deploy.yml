@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -20,18 +20,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm' # 开启缓存加速
+          cache: "npm" # 开启缓存加速
 
       - name: Install dependencies
-        # 强制使用官方源，避免内部源导致的连接错误
-        # 使用 npm install 替代 npm ci 以避免 "Exit handler never called" 错误
-        # 添加 --no-audit --no-fund 减少不必要的检查
+
         run: |
-          npm config set registry https://registry.npmjs.org/
-          npm install --no-audit --no-fund --verbose
+          npm install
 
       - name: Build
-        # 直接运行 npm 脚本，这样它会严格使用 node_modules 里的 vite 6.2.0
         run: npm run build
 
       - name: Setup Pages
@@ -40,7 +36,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: "./dist"
 
       - name: Deploy to GitHub Pages
         id: deployment
